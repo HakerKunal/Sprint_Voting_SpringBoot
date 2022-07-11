@@ -1,5 +1,4 @@
 package com.project.sprintvotingapp.service;
-
 import com.project.sprintvotingapp.common.APIResponse;
 import com.project.sprintvotingapp.entity.Parameter;
 import com.project.sprintvotingapp.entity.Sprint;
@@ -9,10 +8,12 @@ import com.project.sprintvotingapp.repository.ParameterRepository;
 import com.project.sprintvotingapp.repository.SprintRepository;
 import com.project.sprintvotingapp.repository.UserRepository;
 import com.project.sprintvotingapp.repository.VoteRepository;
+import com.project.sprintvotingapp.utils.InsertionException;
 import com.project.sprintvotingapp.utils.Utils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
@@ -29,14 +30,14 @@ public class VoteService {
 
     @Autowired
     private SprintRepository sprintRepository;
-    @Transactional
-    public APIResponse addVotes(HashMap parameterList , int sprintId){
+    @Transactional(rollbackFor = InsertionException.class,propagation = Propagation.REQUIRES_NEW)
+    public APIResponse addVotes(HashMap parameterList , int sprintId) throws InsertionException {
         APIResponse apiResponse=new APIResponse();
-        ArrayList<HashMap> listofVotes=new ArrayList<>();
-        listofVotes= (ArrayList<HashMap>) parameterList.get("parameter_list");
+        ArrayList<HashMap<String,Object>> listofVotes=new ArrayList<>();
+        listofVotes= (ArrayList<HashMap<String,Object>>) parameterList.get("parameter_list");
         int vote_by= (int) parameterList.get("vote_by");
 
-        for (HashMap voteData:listofVotes){
+        for (HashMap<String,Object> voteData:listofVotes){
             voteData.put("sprint_id",sprintId);
             voteData.put("vote_by",vote_by);
             Votes vote= new Votes();
@@ -44,16 +45,16 @@ public class VoteService {
 
             User user_vote_to=userRepository.findById((int)voteData.get("vote_to"));
             if(user_vote_by==user_vote_to){
-                apiResponse.setError("You cannot vote to yourself");
-                apiResponse.setStatus(HttpStatus.BAD_REQUEST.value());
 
-                return apiResponse;
+                throw new  InsertionException("You cannot vote Yourself");
+
 
             }
             if(user_vote_to==null){
                 apiResponse.setError("Vote_to Id Does not exist ");
                 apiResponse.setStatus(HttpStatus.BAD_REQUEST.value());
-                return apiResponse;
+                throw new  InsertionException("Vote_to Id Does not exist ");
+
             }
 
             Parameter parameter=parameterRepository.findByParameterId((int)voteData.get("parameter_id"));
@@ -70,13 +71,13 @@ public class VoteService {
                 apiResponse.setStatus(HttpStatus.BAD_REQUEST.value());
                 return apiResponse;
             }
-            List<Votes> list=  voteRepository.findByVoteBySprintIdAndParameterID(vote_by,parameter.getParameterId(),sprintId);
+            Votes votes=  voteRepository.findByVoteBySprintIdAndParameterID(vote_by,parameter.getParameterId(),sprintId);
 
-            if(list.size()>0){
+            if(votes!=null){
                 apiResponse.setError("User already Voted on the same Parameter");
                 apiResponse.setData("Parameter= "+parameter.getParameterId());
                 apiResponse.setStatus(HttpStatus.BAD_REQUEST.value());
-                return apiResponse;
+                throw new  InsertionException("User already Voted on the same Parameter");
             }
 
             vote.setVoteTo(user_vote_to);
@@ -86,6 +87,69 @@ public class VoteService {
             voteRepository.save(vote);
         }
         apiResponse.setMessage("Voting Successful");
+        apiResponse.setStatus(200);
+        return apiResponse;
+    }
+    @Transactional(rollbackFor = InsertionException.class,propagation = Propagation.REQUIRES_NEW)
+    public APIResponse updateVotes(HashMap parameterList , int sprintId) throws InsertionException {
+        APIResponse apiResponse=new APIResponse();
+        ArrayList<HashMap<String,Object>> listofVotes=new ArrayList<>();
+        listofVotes= (ArrayList<HashMap<String,Object>>) parameterList.get("parameter_list");
+        int vote_by= (int) parameterList.get("vote_by");
+
+        for (HashMap<String,Object> voteData:listofVotes){
+            voteData.put("sprint_id",sprintId);
+            voteData.put("vote_by",vote_by);
+            Votes vote= new Votes();
+            User user_vote_by=userRepository.findById((int)voteData.get("vote_by"));
+
+            User user_vote_to=userRepository.findById((int)voteData.get("vote_to"));
+            if(user_vote_by==user_vote_to){
+
+                throw new  InsertionException("You cannot vote Yourself");
+
+
+            }
+            if(user_vote_to==null){
+                apiResponse.setError("Vote_to Id Does not exist ");
+                apiResponse.setStatus(HttpStatus.BAD_REQUEST.value());
+                throw new  InsertionException("Vote_to Id Does not exist ");
+
+            }
+
+            Parameter parameter=parameterRepository.findByParameterId((int)voteData.get("parameter_id"));
+
+            if(parameter==null){
+                apiResponse.setError("Parameter does not exist");
+                apiResponse.setStatus(HttpStatus.BAD_REQUEST.value());
+                return apiResponse;
+
+            }
+            Sprint sprint=sprintRepository.findBySprintId((int)voteData.get("sprint_id"));
+            if (sprint==null){
+                apiResponse.setError("Sprint Does not exist");
+                apiResponse.setStatus(HttpStatus.BAD_REQUEST.value());
+                return apiResponse;
+            }
+            Votes votes=  voteRepository.findByVoteBySprintIdAndParameterID(vote_by,parameter.getParameterId(),sprintId);
+
+            if(votes!=null){
+                vote.setVoteId(votes.getVoteId());
+                vote.setVoteTo(user_vote_to);
+                vote.setVoteBy(user_vote_by);
+                vote.setSprintId(sprint);
+                vote.setParameterId(parameter);
+                voteRepository.save(vote);
+            }
+            vote.setVoteTo(user_vote_to);
+            vote.setVoteBy(user_vote_by);
+            vote.setSprintId(sprint);
+            vote.setParameterId(parameter);
+            voteRepository.save(vote);
+
+
+        }
+        apiResponse.setMessage("Voting Updation Successful");
         apiResponse.setStatus(200);
         return apiResponse;
     }
@@ -108,7 +172,7 @@ public class VoteService {
             voteList.add(voteData);
 
         }
-        HashMap<String, java.io.Serializable> voteDetail=new HashMap<String, java.io.Serializable>();
+        HashMap<String, java.io.Serializable> voteDetail=new HashMap<>();
         voteDetail.put("vote_by",voteBy);
         voteDetail.put("sprint_id",sprintId);
         voteDetail.put("vote details",voteList);
