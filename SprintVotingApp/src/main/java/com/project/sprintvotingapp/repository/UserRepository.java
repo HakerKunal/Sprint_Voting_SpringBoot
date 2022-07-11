@@ -13,4 +13,8 @@ import java.util.Optional;
 public interface UserRepository extends CrudRepository<User,Integer> {
      User findOneByUsernameIgnoreCaseAndPassword(String username,String password);
      User findByUsername(String username);
+
+    User findById(int id);
+
+
 }

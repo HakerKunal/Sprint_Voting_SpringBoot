@@ -8,10 +8,14 @@ public class APIResponse {
     private Object data;
     private Object error;
 
+    private Object message;
+
     public APIResponse() {
         this.status = HttpStatus.OK.value();
         this.data = data;
         this.error = error;
+        this.message=message;
+
     }
 
     public Integer getStatus() {
@@ -36,5 +40,13 @@ public class APIResponse {
 
     public void setError(Object error) {
         this.error = error;
+    }
+
+    public Object getMessage() {
+        return message;
+    }
+
+    public void setMessage(Object message) {
+        this.message = message;
     }
 }
